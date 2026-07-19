@@ -281,6 +281,14 @@ export async function analyzeMacrosWithAi(
     const items: EnrichedMacroItem[] = base.items.map((i) => ({ ...i, source: "database" }));
     const resolved = new Set<string>();
     for (const est of estimated) {
+      // All-zero estimates mean "not a food" or a container/dish phrase whose
+      // contents are itemized separately - drop them instead of listing 0-kcal rows.
+      const isZero =
+        est.calories === 0 && est.protein_g === 0 && est.carbs_g === 0 && est.fat_g === 0 && est.fiber_g === 0;
+      if (isZero) {
+        resolved.add(est.item.trim().toLowerCase());
+        continue;
+      }
       items.push({
         item: est.item,
         quantity_assumed: est.quantity_assumed,

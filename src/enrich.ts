@@ -105,7 +105,10 @@ const SYSTEM_PROMPT =
   "descriptions. For each one, estimate realistic macros (calories, protein, carbs, fat, " +
   "fiber in grams) for the described portion; when no portion is stated, assume a typical " +
   "single serving and describe that assumption in quantity_assumed. Echo each input string " +
-  "back unchanged in the item field. If a described item is not a food, return zeros for it.";
+  "back unchanged in the item field. If a described item is not a food, return zeros for it. " +
+  "If an item is a container or dish phrase whose contents are itemized separately in the same " +
+  "meal (e.g. 'a buddha bowl' alongside its listed ingredients, 'a salad' followed by its parts, " +
+  "'a plate'), return zeros for the container itself so its contents are not double-counted.";
 
 /** Signature the analyzer accepts, so tests can inject a fake estimator. */
 export type UnmatchedEstimator = (unmatched: string[]) => Promise<AiEstimatedItem[] | undefined>;

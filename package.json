@@ -1,0 +1,35 @@
+{
+  "name": "macrolens-asp",
+  "version": "1.0.0",
+  "description": "MacroLens - free-text meal macro analysis as a paid MCP Agentic Service Provider (OKX.AI Genesis Hackathon, Lifestyle Companion track)",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "x402",
+    "okx",
+    "asp",
+    "nutrition",
+    "macros"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^5.2.1",
+    "x402-express": "^1.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
+  }
+}

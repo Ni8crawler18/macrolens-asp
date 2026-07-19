@@ -22,8 +22,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@okxweb3/x402-core": "^0.1.0",
+    "@okxweb3/x402-evm": "^0.2.1",
+    "@okxweb3/x402-express": "^0.1.1",
     "express": "^5.2.1",
-    "x402-express": "^1.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

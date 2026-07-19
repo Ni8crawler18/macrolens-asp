@@ -2,7 +2,7 @@
 
 **OKX.AI Genesis Hackathon — Lifestyle Companion track.**
 
-MacroLens is an **Agentic Service Provider (ASP)**: a nutrition micro-service that *other AI agents pay to call*. When a lifestyle-companion agent's user says "I had 2 eggs, toast with butter, a banana and a glass of milk", the agent calls MacroLens over MCP, pays $0.05 per call via the x402 payment protocol, and gets back a per-item macro breakdown, totals and balance advice — no food database or parsing logic of its own required.
+MacroLens is an **Agentic Service Provider (ASP)**: a nutrition micro-service that *other AI agents pay to call*. When a lifestyle-companion agent's user says "I had 2 eggs, toast with butter, a banana and a glass of milk", the agent calls MacroLens over MCP, pays $0.02 per call via the x402 payment protocol, and gets back a per-item macro breakdown, totals and balance advice — no food database or parsing logic of its own required.
 
 ## What it does
 
@@ -51,8 +51,8 @@ Configuration (see `.env.example`):
 | `ENRICH_MODEL` | Model to use; defaults to `claude-haiku-4-5` |
 
 **Cost note:** with the default Haiku model a typical call is roughly
-**$0.003–0.006** (small prompt, ≤2000 output tokens) — comfortably below the
-$0.05 x402 price per call. Enrichment only fires when there are unmatched
+**$0.003–0.006** (small prompt, ≤2000 output tokens) — below the
+$0.02 x402 price per call. Enrichment only fires when there are unmatched
 items, so fully-matched meals cost nothing extra.
 
 ## Architecture
@@ -60,7 +60,7 @@ items, so fully-matched meals cost nothing extra.
 ```
 src/
   server.ts          Express app: MCP Streamable HTTP at /mcp (stateless) + REST at /api/macros
-  x402.ts            x402 payment middleware (real x402-express, env-gated; stub fallback)
+  x402.ts            OKX x402 payment middleware (@okxweb3/x402-express, env-gated no-op by default)
   schemas.ts         Zod input schema (shared by MCP tool and REST)
   tools/macros.ts    pure, unit-tested parser + analyzer
   enrich.ts          optional Claude enrichment layer (LLM fallback for unmatched foods)
@@ -121,25 +121,32 @@ curl -s -X POST http://localhost:4022/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"analyze_macros","arguments":{"meal_description":"a bowl of dal, 2 rotis and a glass of skim milk"}}}'
 ```
 
-## Enable x402 payments
+## OKX payment
+
+Paid calls are settled via OKX's official x402 seller middleware
+(`@okxweb3/x402-express` + `@okxweb3/x402-core` + `@okxweb3/x402-evm`) against
+the OKX facilitator on **X Layer** (`eip155:196`).
+
+| Route              | Price |
+| ------------------ | ----- |
+| `POST /api/macros` | $0.02 |
+
+Env vars (all four OKX values plus `PAYMENT_ENABLED=true` are required to
+activate payments; create keys at <https://web3.okx.com/onchainos/dev-portal>):
 
 ```bash
-cp .env.example .env
-# then set:
-#   PAYMENT_ENABLED=true
-#   PAY_TO_ADDRESS=0xYourReceivingAddress
-#   PRICE_PER_CALL=$0.05
-#   X402_NETWORK=base-sepolia   # or your target network
-npm run dev
+PAYMENT_ENABLED=true
+OKX_API_KEY=...
+OKX_SECRET_KEY=...
+OKX_PASSPHRASE=...
+PAY_TO_ADDRESS=0xYourReceivingAddress
 ```
 
-With payments enabled, unpaid calls to `/mcp` and `/api/macros` get **HTTP 402** with the standard x402 `accepts` payment requirements (real `x402-express` middleware):
-
-```json
-{"x402Version":1,"error":"X-PAYMENT header is required","accepts":[{"scheme":"exact","network":"base-sepolia","maxAmountRequired":"50000","payTo":"0x...","asset":"0x...USDC...","maxTimeoutSeconds":60}]}
-```
-
-x402-capable agent clients retry automatically with a signed `X-PAYMENT` header; the middleware verifies and settles via the facilitator (defaults to the x402.org testnet facilitator; override with `X402_FACILITATOR_URL`). If `x402-express` cannot be loaded at runtime, `src/x402.ts` falls back to a clearly marked **stub** that only advertises the 402 requirements without settling — wire that to OKX's x402 facilitator flow before production.
+With payment active, unpaid requests to the paid route get **HTTP 402** with an
+`x402Version: 2` payment-required body listing the accepted `exact`-scheme
+X Layer payment option. If any variable is missing, or OKX initialization
+fails, the server logs one line and serves everything free — deploys stay safe
+until real keys exist. `/healthz`, `/` and `/mcp` are never payment-gated.
 
 ## Register as an ASP on OKX.AI
 

@@ -1,10 +1,11 @@
+import { pathToFileURL } from "node:url";
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { macrosInputShape, MacrosInput } from "./schemas.js";
 import { analyzeMacrosWithAi } from "./tools/macros.js";
 import { enrichmentEnabled, enrichmentModel } from "./enrich.js";
-import { buildPaymentMiddleware, loadPaymentConfig } from "./x402.js";
+import { installOkxPayment, NETWORK, PAID_ROUTES } from "./x402.js";
 
 // Load .env if present (Node 22 built-in; no dotenv dependency needed).
 try {
@@ -46,8 +47,9 @@ export async function createApp() {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
 
-  const paymentCfg = loadPaymentConfig();
-  app.use(await buildPaymentMiddleware(["/mcp", "/api/macros"], paymentCfg));
+  // OKX x402 payment gate (no-op unless PAYMENT_ENABLED=true + OKX creds set).
+  // Gates only the paid REST routes — /healthz, / and /mcp stay free.
+  const payment = await installOkxPayment(app);
 
   // ---- Service discovery / health ----
   app.get("/", (_req, res) => {
@@ -57,10 +59,10 @@ export async function createApp() {
       rest_endpoints: { "POST /api/macros": "same logic as the MCP tool, plain JSON" },
       tools: ["analyze_macros"],
       payment: {
-        enabled: paymentCfg.enabled,
-        price_per_call: paymentCfg.price,
-        network: paymentCfg.network,
-        protocol: "x402",
+        enabled: payment.enabled,
+        network: NETWORK,
+        protocol: "x402 (OKX facilitator, X Layer)",
+        prices: Object.fromEntries(PAID_ROUTES.map((r) => [r.route, r.price])),
       },
       ai_enrichment: {
         enabled: enrichmentEnabled(),
@@ -122,18 +124,24 @@ export async function createApp() {
 
 const PORT = Number(process.env.PORT ?? 4022);
 
-createApp()
-  .then((app) => {
-    app.listen(PORT, () => {
-      const cfg = loadPaymentConfig();
-      console.log(`MacroLens ASP listening on http://localhost:${PORT}`);
-      console.log(`  MCP endpoint:  POST http://localhost:${PORT}/mcp`);
-      console.log(`  REST endpoint: POST http://localhost:${PORT}/api/macros`);
-      console.log(`  x402 payments: ${cfg.enabled ? `ENABLED (${cfg.price} on ${cfg.network} -> ${cfg.payTo})` : "disabled (dev mode)"}`);
-      console.log(`  AI enrichment: ${enrichmentEnabled() ? `ENABLED (${enrichmentModel()})` : "disabled (deterministic only)"}`);
+// Only auto-start when executed directly (node dist/server.js / tsx src/server.ts),
+// not when imported by tests.
+const isMain =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
+  createApp()
+    .then((app) => {
+      app.listen(PORT, () => {
+        console.log(`MacroLens ASP listening on http://localhost:${PORT}`);
+        console.log(`  MCP endpoint:  POST http://localhost:${PORT}/mcp`);
+        console.log(`  REST endpoint: POST http://localhost:${PORT}/api/macros`);
+        console.log(`  AI enrichment: ${enrichmentEnabled() ? `ENABLED (${enrichmentModel()})` : "disabled (deterministic only)"}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to start MacroLens:", err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error("Failed to start MacroLens:", err);
-    process.exit(1);
-  });
+}
